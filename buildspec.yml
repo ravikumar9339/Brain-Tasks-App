@@ -24,4 +24,3 @@ phases:
       - printf '[{"name":"brain-service","imageUri":"%s.dkr.ecr.%s.amazonaws.com/%s:%s"}]' $ACCOUNT_ID $REGION $REPO_NAME $IMAGE_TAG > imagedefinitions.json
 artifacts:
   files: imagedefinitions.json
-
