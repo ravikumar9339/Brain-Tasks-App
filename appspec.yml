@@ -1,0 +1,10 @@
+version: 0.0
+Resources:
+  - brainK8sManifest:
+      Type: AWS::EKS::Manifest
+      Properties:
+        ClusterName: brain-cluster
+        RoleArn: arn:aws:iam::251221984734:role/CodeDeployEKSRole
+        ManifestPaths:
+          - deployment.yaml
+          - service.yaml
