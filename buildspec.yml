@@ -1,0 +1,60 @@
+version: 0.2
+
+env:
+  variables:
+    REGION: "us-east-1"
+    REPO_NAME: "brain-tasks-app"
+  compute-type: BUILD_GENERAL1_SMALL
+
+phases:
+  install:
+    runtime-versions:
+      docker: 20
+    commands:
+      - echo "Install phase..."
+      - apt-get update -y && apt-get install -y jq
+  pre_build:
+    commands:
+      - echo "Login to ECR"
+      - ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+      - ECR_URI="$ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com/$REPO_NAME"
+      - aws ecr get-login-password --region $REGION | docker login --username AWS --password-stdin $ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com
+
+      # Configure kubectl against the cluster
+      - echo "Configure kubectl"
+      - aws eks update-kubeconfig --name brain-cluster --region $REGION
+      - kubectl get nodes
+
+      # image tag = short commit id or timestamp
+      - IMAGE_TAG=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c1-7)
+      - if [ -z "$IMAGE_TAG" ]; then IMAGE_TAG=$(date +%Y%m%d%H%M%S); fi
+      - echo "Using tag: $IMAGE_TAG"
+  build:
+    commands:
+      - echo "Building image"
+      - docker build -t $REPO_NAME:$IMAGE_TAG .
+
+      - echo "Tag & push"
+      - docker tag $REPO_NAME:$IMAGE_TAG $ECR_URI:$IMAGE_TAG
+      - docker push $ECR_URI:$IMAGE_TAG
+  post_build:
+    commands:
+      - echo "Update Kubernetes deployment image"
+      # If deployment already exists, patch only the image:
+      - |
+        if kubectl get deploy/brain-deploy >/dev/null 2>&1; then
+          kubectl set image deployment/brain-deploy brain-container=$ECR_URI:$IMAGE_TAG --record
+        else
+          # first time: template manifests with the new image and apply
+          sed "s|ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/brain-tasks-app:v1|$ECR_URI:$IMAGE_TAG|g" deployment.yaml | kubectl apply -f -
+          kubectl apply -f service.yaml
+        fi
+
+      - echo "Wait for rollout"
+      - kubectl rollout status deploy/brain-deploy --timeout=120s
+
+      - echo "Show LoadBalancer DNS"
+      - kubectl get svc brain-service -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'; echo
+artifacts:
+  files:
+    - '**/*'
