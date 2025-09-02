@@ -2,34 +2,15 @@ version: 0.2
 
 phases:
   install:
-    runtime-versions:
-      nodejs: 18
     commands:
-      - echo Installing dependencies...
-      - npm install --legacy-peer-deps
-  build:
-    commands:
-      - echo Build started on `date`
-      - npm run build
-
-  pre_build:
-    commands:
-      - echo "Running pre-build tasks"
+      - echo "Skipping npm install because only static files exist."
 
   build:
     commands:
-      - echo "Build started on `date`"
-      - npm run build
-
-  post_build:
-    commands:
-      - echo "Build completed on `date`"
-      - echo "Pushing Docker image to ECR"
-      - docker build -t brain-tasks-app .
-      - docker tag brain-tasks-app:latest 251221984734.dkr.ecr.us-east-1.amazonaws.com/brain-tasks-app:latest
-      - docker push 251221984734.dkr.ecr.us-east-1.amazonaws.com/brain-tasks-app:latest
+      - echo "No build step required. Using prebuilt dist/ files."
 
 artifacts:
   files:
     - '**/*'
-
+  base-directory: dist
+  discard-paths: no
